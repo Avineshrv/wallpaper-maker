@@ -1,118 +1,167 @@
-import Image from "next/image";
-import { Inter } from "next/font/google";
+'use client'
+import { Stage, Layer, Image } from 'react-konva';
+import useImage from 'use-image';
+import { useState, useRef, useEffect } from 'react';
+import { MdFileDownload, MdUndo, MdRedo } from 'react-icons/md';
+import ImageComponent from 'next/image';
 
-const inter = Inter({ subsets: ["latin"] });
+const KonvaCanvas = () => {
+    const [windowSize, setWindowSize] = useState({ width: 0, height: 0 });
+    const [backgrounds] = useState(['/images/bg/bg1.jpg', '/images/bg/bg2.jpg', '/images/bg/bg3.jpg']);
+    const [toys] = useState(['/images/character/image.png']);
+    const [stickers, setStickers] = useState([
+        { src: '/images/sticker/pow.png', positions: [] },
+        { src: '/images/sticker/pow.png', positions: [] },
+        { src: '/images/sticker/pow.png', positions: [] },
+    ]);
+    const [currentBackground, setCurrentBackground] = useState(backgrounds[0]);
+    const [currentToy, setCurrentToy] = useState(toys[0]);
+    const [selectedStickerIndex, setSelectedStickerIndex] = useState(null);
+    const [backgroundImage] = useImage(currentBackground);
+    const [toyImage] = useImage(currentToy);
+    const stickerImages = stickers.map(sticker => useImage(sticker.src));
+    const stageRef = useRef(null);
+    const [history, setHistory] = useState([stickers]);
+    const [currentStep, setCurrentStep] = useState(0);
+
+    useEffect(() => {
+      const updateSize = () => {
+        setWindowSize({ width: window.innerWidth, height: window.innerHeight });
+      };
+  
+      updateSize(); 
+  
+      window.addEventListener("resize", updateSize);
+      return () => window.removeEventListener("resize", updateSize);
+    }, []);
+
+    const handleBackgroundClick = (e) => {
+        e.cancelBubble = true;
+        const evt = e.evt;
+        const stage = stageRef.current;
+        const containerRect = stage.container().getBoundingClientRect();
+        const isTouch = evt.type === 'touchend';
+        const x = isTouch ? evt.changedTouches[0].clientX - containerRect.left : evt.layerX;
+        const y = isTouch ? evt.changedTouches[0].clientY - containerRect.top : evt.layerY;
+
+        if (selectedStickerIndex !== null) {
+            const stickerImage = stickerImages[selectedStickerIndex][0];
+            if (stickerImage) {
+                const newX = x - stickerImage.width / 20;
+                const newY = y - stickerImage.height / 20;
+                const newStickers = stickers.map((sticker, index) => {
+                    if (index === selectedStickerIndex) {
+                        return { ...sticker, positions: [...sticker.positions, { x: newX, y: newY }] };
+                    }
+                    return sticker;
+                });
+                updateHistory(newStickers);
+            }
+        }
+    };
+
+    const handleDragEnd = (e, stickerIndex, positionIndex) => {
+        const newPos = { x: e.target.x(), y: e.target.y() };
+        const newStickers = stickers.map((sticker, sIdx) => {
+            if (sIdx === stickerIndex) {
+                const newPositions = sticker.positions.map((pos, pIdx) => {
+                    if (pIdx === positionIndex) {
+                        return newPos;
+                    }
+                    return pos;
+                });
+                return { ...sticker, positions: newPositions };
+            }
+            return sticker;
+        });
+        updateHistory(newStickers);
+    };
+
+    const updateHistory = (newStickers) => {
+        const newHistory = history.slice(0, currentStep + 1);
+        newHistory.push(newStickers);
+        setHistory(newHistory);
+        setCurrentStep(newHistory.length - 1);
+        setStickers(newStickers);
+    };
+
+    const undo = () => {
+        if (currentStep > 0) {
+            setStickers(history[currentStep - 1]);
+            setCurrentStep(currentStep - 1);
+        }
+    };
+
+    const redo = () => {
+        if (currentStep < history.length - 1) {
+            setStickers(history[currentStep + 1]);
+            setCurrentStep(currentStep + 1);
+        }
+    };
+
+    const downloadCanvas = () => {
+        const uri = stageRef.current.toDataURL({ pixelRatio: 2 });
+        const link = document.createElement('a');
+        link.download = 'canvas-image.png';
+        link.href = uri;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+
+    return (
+        <div className='relative'>
+            <Stage width={windowSize.width} height={windowSize.height} ref={stageRef}>
+                <Layer>
+                    <Image image={backgroundImage} width={windowSize.width} height={windowSize.height} onClick={handleBackgroundClick} onTouchEnd={handleBackgroundClick} alt="bg" />
+                    {stickers.map((sticker, sIdx) =>
+                        sticker.positions.map((pos, pIdx) =>
+                            <Image key={`${sIdx}-${pIdx}`} image={stickerImages[sIdx][0]} x={pos.x} y={pos.y} width={51.2} height={51.2} alt="sticker" draggable
+                                onDragEnd={(e) => handleDragEnd(e, sIdx, pIdx)} />
+                        )
+                    )}
+                    {toyImage && <Image image={toyImage} x={(windowSize.width - toyImage.width) / 2} y={(windowSize.height - toyImage.height) / 2} alt="toy" listening={false} />}
+                </Layer>
+            </Stage>
+            <div className="controls absolute top-4 bg-white p-4 left-4 rounded-md">
+                <div className='flex gap-2'>
+                    {backgrounds.map((bg, i) => (
+                        <button key={i} onClick={() => setCurrentBackground(bg)}>
+                            <ImageComponent src={bg} alt={`Background ${i}`} width="50" height="50" />
+                        </button>
+                    ))}
+                </div>
+                <div className='flex gap-2'>
+                    {toys.map((toy, i) => (
+                        <button key={i} onClick={() => setCurrentToy(toy)}>
+                            <ImageComponent src={toy} alt={`Toy ${i}`} width="50" height="50" />
+                        </button>
+                    ))}
+                </div>
+                <div className='flex gap-2'>
+                    {stickers.map((sticker, i) => (
+                        <button key={i} onClick={() => setSelectedStickerIndex(i)}>
+                            <ImageComponent src={sticker.src} alt={`Sticker ${i}`} width="50" height="50" />
+                        </button>
+                    ))}
+                </div>
+                <div className='flex justify-center items-center gap-8'>
+                    <button className='bg-black text-white rounded-md p-2 text-sm' onClick={undo}>
+                        <MdUndo size="24px" />
+                    </button>
+                    <button className='bg-black text-white rounded-md p-2 text-sm' onClick={redo}>
+                        <MdRedo size="24px" />
+                    </button>
+                </div>
+                <button className='px-4 py-3 bg-blue-600 rounded-md text-white outline-none focus:ring-4 shadow-lg transform active:scale-x-75 transition-transform mx-5 flex' onClick={downloadCanvas}>
+                    <MdFileDownload size="20px" />
+                    <span className='ml-2'>Download</span>
+                </button>
+            </div>
+        </div>
+    );
+};
 
 export default function Home() {
-  return (
-    <main
-      className={`flex min-h-screen flex-col items-center justify-between p-24 ${inter.className}`}
-    >
-      <div className="z-10 max-w-5xl w-full items-center justify-between font-mono text-sm lg:flex">
-        <p className="fixed left-0 top-0 flex w-full justify-center border-b border-gray-300 bg-gradient-to-b from-zinc-200 pb-6 pt-8 backdrop-blur-2xl dark:border-neutral-800 dark:bg-zinc-800/30 dark:from-inherit lg:static lg:w-auto lg:rounded-xl lg:border lg:bg-gray-200 lg:p-4 lg:dark:bg-zinc-800/30">
-          Get started by editing&nbsp;
-          <code className="font-mono font-bold">pages/index.js</code>
-        </p>
-        <div className="fixed bottom-0 left-0 flex h-48 w-full items-end justify-center bg-gradient-to-t from-white via-white dark:from-black dark:via-black lg:static lg:h-auto lg:w-auto lg:bg-none">
-          <a
-            className="pointer-events-none flex place-items-center gap-2 p-8 lg:pointer-events-auto lg:p-0"
-            href="https://vercel.com?utm_source=create-next-app&utm_medium=default-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            By{" "}
-            <Image
-              src="/vercel.svg"
-              alt="Vercel Logo"
-              className="dark:invert"
-              width={100}
-              height={24}
-              priority
-            />
-          </a>
-        </div>
-      </div>
-
-      <div className="relative flex place-items-center before:absolute before:h-[300px] before:w-full sm:before:w-[480px] before:-translate-x-1/2 before:rounded-full before:bg-gradient-radial before:from-white before:to-transparent before:blur-2xl before:content-[''] after:absolute after:-z-20 after:h-[180px] after:w-full sm:after:w-[240px] after:translate-x-1/3 after:bg-gradient-conic after:from-sky-200 after:via-blue-200 after:blur-2xl after:content-[''] before:dark:bg-gradient-to-br before:dark:from-transparent before:dark:to-blue-700/10 after:dark:from-sky-900 after:dark:via-[#0141ff]/40 before:lg:h-[360px]">
-        <Image
-          className="relative dark:drop-shadow-[0_0_0.3rem_#ffffff70] dark:invert"
-          src="/next.svg"
-          alt="Next.js Logo"
-          width={180}
-          height={37}
-          priority
-        />
-      </div>
-
-      <div className="mb-32 grid text-center lg:max-w-5xl lg:w-full lg:mb-0 lg:grid-cols-4 lg:text-left">
-        <a
-          href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=default-template-tw&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Docs{" "}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50`}>
-            Find in-depth information about Next.js features and API.
-          </p>
-        </a>
-
-        <a
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=default-template-tw&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Learn{" "}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50`}>
-            Learn about Next.js in an interactive course with&nbsp;quizzes!
-          </p>
-        </a>
-
-        <a
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=default-template-tw&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Templates{" "}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50`}>
-            Discover and deploy boilerplate example Next.js&nbsp;projects.
-          </p>
-        </a>
-
-        <a
-          href="https://vercel.com/new?utm_source=create-next-app&utm_medium=default-template-tw&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Deploy{" "}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50 text-balance`}>
-            Instantly deploy your Next.js site to a shareable URL with Vercel.
-          </p>
-        </a>
-      </div>
-    </main>
-  );
+    return <div><KonvaCanvas /></div>;
 }
