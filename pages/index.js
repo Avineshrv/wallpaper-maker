@@ -126,6 +126,31 @@ const KonvaCanvas = () => {
     document.body.removeChild(link);
   };
 
+  const getToyImageDimensions = () => {
+    if (!toyImage) return { width: 0, height: 0 };
+
+    const scaleFactor = 0.75;
+    const maxWidth = windowSize.width * scaleFactor;
+    const maxHeight = windowSize.height * scaleFactor;
+
+    const imageAspectRatio = toyImage.width / toyImage.height;
+    const stageAspectRatio = maxWidth / maxHeight;
+
+    let newWidth, newHeight;
+
+    if (imageAspectRatio > stageAspectRatio) {
+      newWidth = Math.min(toyImage.width, maxWidth);
+      newHeight = newWidth / imageAspectRatio;
+    } else {
+      newHeight = Math.min(toyImage.height, maxHeight);
+      newWidth = newHeight * imageAspectRatio;
+    }
+
+    return { width: newWidth, height: newHeight };
+  };
+
+  const { width: toyWidth, height: toyHeight } = getToyImageDimensions();
+
   console.log(toyImage?.width * 0, "WIDTH");
 
   console.log(toyImage);
@@ -160,18 +185,10 @@ const KonvaCanvas = () => {
           {toyImage && (
             <Image
               image={toyImage}
-              width={Math.min(toyImage.width, toyImage.width * 0.5)} 
-              height={Math.min(toyImage.height, toyImage.height * 0.5)}
-              x={
-                (windowSize.width -
-                  Math.min(toyImage.width, windowSize.width * 0.8)) /
-                2
-              }
-              y={
-                (windowSize.height -
-                  Math.min(toyImage.height, windowSize.height * 0.8)) /
-                2
-              }
+              x={(windowSize.width - toyWidth) / 2}
+              y={(windowSize.height - toyHeight) / 2}
+              width={toyWidth}
+              height={toyHeight}
               alt="toy"
               listening={false}
             />
